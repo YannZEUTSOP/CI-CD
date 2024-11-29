@@ -1,0 +1,125 @@
+name: workflow Pipeline
+
+on:
+  push:
+    branches:
+      - dev
+      - main
+
+permissions:
+  contents: write      
+  pull-requests: write 
+  actions: write
+
+jobs:
+  build-and-test-dev:
+    if: github.ref == 'refs/heads/dev'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      - name: Install frontend dependencies 
+        run: |
+          cd frontend
+          npm install
+      
+      - name: Install backend dependencies 
+        run: |
+          cd backend
+          npm install
+
+      - name: Run frontend unit tests
+        run: |
+          cd frontend 
+          npm test
+
+      - name: Run backend unit tests
+        run: |
+          cd backend
+          npm test
+
+      - name: Merge dev into main
+        if: ${{ success() }}
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const sourceBranch = 'dev';
+            const targetBranch = 'main';
+            await github.rest.repos.merge({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              base: targetBranch,
+              head: sourceBranch,
+            });
+
+  build-test-deploy-main:
+    needs: build-and-test-dev
+    if: github.ref == 'refs/heads/dev' && success()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+      
+      - name: Fetch the main
+        run: |
+          git fetch origin main
+          git checkout main
+
+      - name: Install frontend dependencies 
+        run: |
+          cd frontend
+          npm install
+      
+      - name: Install backend dependencies 
+        run: |
+          cd backend
+          npm install
+
+      - name: Run frontend unit tests
+        run: |
+          cd frontend
+          npm test
+      - name: Run backend unit tests
+        run: |
+          cd backend
+          npm test
+
+      - name: E2E Test Dependencies
+        run: |
+          cd e2e-tests
+          npm install
+
+      
+      - name: Install Docker Compose
+        run: |
+          sudo curl -L "https://github.com/docker/compose/releases/download/v2.22.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+          sudo chmod +x /usr/local/bin/docker-compose
+          docker-compose --version 
+      
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: yannzeutsop
+          password: ${{ secrets.DOCKER_TOKEN }}
+
+
+      - name: Build Backend Docker Images
+        run: |
+          docker build -t yannzeutsop/backend:latest ./backend
+          docker build -t yannzeutsop/frontend:latest ./frontend
+
+      - name: Push Docker images
+        run: |
+          docker -D push yannzeutsop/backend:latest
+          docker -D push yannzeutsop/frontend:latest
