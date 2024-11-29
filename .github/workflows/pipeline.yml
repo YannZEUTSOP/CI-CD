@@ -12,7 +12,7 @@ permissions:
   actions: write
 
 jobs:
-  build-and-test-dev:
+  workflow_dev:
     if: github.ref == 'refs/heads/dev'
     runs-on: ubuntu-latest
     steps:
@@ -58,8 +58,8 @@ jobs:
               head: sourceBranch,
             });
 
-  build-test-deploy-main:
-    needs: build-and-test-dev
+  workflow_main:
+    needs: workflow_dev
     if: github.ref == 'refs/heads/dev' && success()
     runs-on: ubuntu-latest
     steps:
